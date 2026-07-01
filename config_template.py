@@ -45,9 +45,12 @@ LINES_PER_ACCESS = 1
 #                     Requires LINES_PER_ACCESS <= max columns supported by ADDR_MAP below.
 ACCESS_MODE = 0
 
-# DRAM address mapping used by ACCESS_MODE=1 — a key into address_mapping.SYSTEMS.
-# See address_mapping.py to add mappings for other systems/configurations.
-ADDR_MAP = "arrow_1ch_1dpc_2rank_32gb"
+# Default DRAM address mapping for ACCESS_MODE=1 — a key into address_mapping.SYSTEMS.
+# All registered SYSTEMS are compiled into the binary; this picks the DEFAULT used
+# when the ACCESS_MAP env var is unset. To use another mapping at runtime WITHOUT
+# rebuilding, run e.g.  ACCESS_MAP=<name> ./randread_bw ...  (sweep_bw.py passes this
+# value automatically). See address_mapping.py to add mappings for other systems.
+ADDR_MAP = "arrow_1ch_1dpc_1rank_16gb"
 
 # ─── Misc ────────────────────────────────────────────────────────────────────
 

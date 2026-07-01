@@ -9,10 +9,10 @@
 | `randread_bw` | 무작위 read | HPCC RandomAccess POLY LFSR 주소 생성, 캐시라인 단위 random read |
 | `stream_bw` | 순차 read | 스레드별 연속 구간을 캐시라인 stride로 순차 스캔 (STREAM 류) |
 | `sweep_bw.py` | — | 1코어부터 N코어까지 스윕하며 대역폭·이론 DRAM 피크 대비 % 출력 |
-| `config.py` | — | DIMM·NUMA·hugepage·스윕 범위 등 모든 설정을 관리하는 설정 파일 (git 미추적, `make` 시 자동 생성) |
+| `config.py` | — | DIMM·NUMA·hugepage·스윕 범위 등 모든 설정을 관리하는 설정 파일 (git 미추적, `make config`로 생성) |
 | `config_template.py` | — | `config.py`의 기본값 템플릿 (git 추적) |
 | `address_mapping.py` | — | 시스템별 DRAM 주소 매핑(채널/랭크/뱅크그룹/뱅크/row/col) 레지스트리 + XOR 마스크 솔버 |
-| `gen_access_masks.py` | — | `config.ADDR_MAP`으로부터 `access_masks.h`를 생성 (`make` 시 자동 실행) |
+| `gen_access_masks.py` | — | `address_mapping.SYSTEMS` 전체를 `access_masks.h` 테이블로 생성 (`make` 시 자동 실행) |
 
 ## 설계 요점
 
@@ -45,9 +45,15 @@
 | 0 | `consecutive` (기본) | 랜덤으로 고른 `lines_per_access × 64B` 정렬 블록에서 연속 캐시라인 접근 (`addr, addr+64, addr+128, …`). 기존 동작과 동일 |
 | 1 | `samebank` | 랜덤으로 고른 캐시라인 주소를 `access_masks.h`의 마스크와 XOR 하여, 모든 캐시라인이 **같은 channel/rank/bank-group/bank(뱅크)·같은 row**에서 **인접한 column**만 바뀌도록 접근 (row buffer hit 패턴) |
 
-`mode=1`은 `address_mapping.py`에 정의된 DRAM 주소 매핑(`config.ADDR_MAP`으로 선택)을 기반으로 컴파일 타임에 XOR 마스크를 계산합니다. 주소 매핑에서 column을 결정하는 물리 비트가 channel/rank/bank-group/bank를 결정하는 XOR 함수의 입력과 겹치는 경우가 많아, 단순히 column 비트만 뒤집으면 뱅크가 바뀌어 버립니다. `address_mapping.col_step_masks()`는 GF(2) 선형대수(XOR basis)로 이 겹침을 상쇄하는 최소 마스크를 계산합니다 — 자세한 내용은 `address_mapping.py`의 모듈 docstring과 `gen_access_masks.py` 참고.
+`mode=1`은 `address_mapping.py`에 정의된 DRAM 주소 매핑을 기반으로 XOR 마스크를 계산합니다. 주소 매핑에서 column을 결정하는 물리 비트가 channel/rank/bank-group/bank를 결정하는 XOR 함수의 입력과 겹치는 경우가 많아, 단순히 column 비트만 뒤집으면 뱅크가 바뀌어 버립니다. `address_mapping.col_step_masks()`는 GF(2) 선형대수(XOR basis)로 이 겹침을 상쇄하는 최소 마스크를 계산합니다 — 자세한 내용은 `address_mapping.py`의 모듈 docstring과 `gen_access_masks.py` 참고.
 
-`mode=1`이 지원하는 최대 `lines_per_access`는 선택된 `ADDR_MAP`의 column 폭에 따라 결정되며 (`access_masks.h`의 `ACCESS_NUM_COL_BITS`), 이를 초과하면 실행 시 에러로 종료합니다.
+**매핑은 런타임에 선택**합니다. `access_masks.h`에는 `address_mapping.SYSTEMS`의 **모든** 매핑이 테이블로 컴파일되며, 실행 시 `ACCESS_MAP=<name>` 환경변수로 고릅니다. 미지정 시 `config.ADDR_MAP`(컴파일 타임 기본값)을 사용합니다. 따라서 매핑을 바꿔도 재컴파일이 필요 없습니다.
+
+```bash
+ACCESS_MAP=arrow_1ch_1dpc_2rank_32gb numactl -C 0 -m 0 ./randread_bw 4 100000000 4 4 1
+```
+
+없는 이름을 주면 사용 가능한 매핑 목록을 출력하고 종료합니다. `mode=1`이 지원하는 최대 `lines_per_access`는 선택된 매핑의 column 폭(`num_col_bits`)에 따라 결정되며, 이를 초과하면 실행 시 에러로 종료합니다.
 
 #### 주소 충돌에 대하여
 스트림마다 64비트 `ran` 수열 구간은 겹치지 않지만, 하위 비트 인덱스가 같아 **캐시라인 주소가 코어 간·반복 간 겹칠 수 있습니다.**
@@ -59,7 +65,8 @@
 ## 빌드
 
 ```bash
-make            # config.py, access_masks.h 자동 생성(없을 때) 후 randread_bw, stream_bw 빌드 (SIMD 폭 자동 감지)
+make config     # config.py를 config_template.py에서 (재)생성 — 최초 1회 (기존 파일 덮어씀)
+make            # access_masks.h 자동 생성 후 randread_bw, stream_bw 빌드 (SIMD 폭 자동 감지)
 make WIDTH=256  # AVX2 256비트로 강제
 make WIDTH=64   # 스칼라(64비트)로 강제
 make WIDTH=512 EXTRA_CXXFLAGS=-mavx512f  # AVX-512 강제 (해당 ISA 지원 머신/시뮬레이터용)
@@ -67,7 +74,9 @@ make WIDTH=512 EXTRA_CXXFLAGS=-mavx512f  # AVX-512 강제 (해당 ISA 지원 머
 
 요구 환경: g++ 13+, Linux(1GB hugepage 지원).
 
-`access_masks.h`는 `config.ADDR_MAP`(및 `address_mapping.py`)로부터 `gen_access_masks.py`가 자동 생성하는 파일로, `randread_bw`의 `mode=1`(samebank) 접근에 사용됩니다. `config.py`나 `address_mapping.py`를 수정하면 다음 `make` 시 재생성됩니다. 수동 실행: `python3 gen_access_masks.py [-o access_masks.h]`.
+`config.py`는 사용자 입력이라 빌드와 분리돼 있습니다 — 최초에 `make config`로 만든 뒤 편집하세요. config.py 없이 `make`를 실행하면 조용히 만들지 않고 안내 메시지와 함께 실패합니다.
+
+`access_masks.h`는 `address_mapping.SYSTEMS` 전체를 `gen_access_masks.py`가 테이블로 생성하는 파일로, `randread_bw`의 `mode=1`(samebank) 접근에 사용됩니다(실행 시 `ACCESS_MAP`으로 매핑 선택, 기본값은 `config.ADDR_MAP`). `config.py`나 `address_mapping.py`를 수정하면 다음 `make` 시 재생성됩니다. 수동 실행: `python3 gen_access_masks.py [-o access_masks.h]`.
 
 ## SIMD 로드 폭 (512 / 256 / 64)
 
@@ -103,8 +112,10 @@ make WIDTH=512 EXTRA_CXXFLAGS=-mavx512f  # AVX-512 강제 (해당 ISA 지원 머
 
 # 예시: 8코어, 5천만회, 4GB 영역, 4라인/접근, 연속 접근(mode=0)
 numactl -C 0,2,4,6,8,10,12,14 -m 0 ./randread_bw 8 50000000 4 4 0
-# 동일 조건, 같은 뱅크/row 내 인접 column 접근(mode=1)
+# 동일 조건, 같은 뱅크/row 내 인접 column 접근(mode=1) — 기본 매핑(config.ADDR_MAP)
 numactl -C 0,2,4,6,8,10,12,14 -m 0 ./randread_bw 8 50000000 4 4 1
+# mode=1에서 매핑을 런타임 지정 (재컴파일 불필요)
+ACCESS_MAP=arrow_1ch_1dpc_2rank_32gb numactl -C 0,2,4,6,8,10,12,14 -m 0 ./randread_bw 8 50000000 4 4 1
 numactl -C 0,2,4,6,8,10,12,14 -m 0 ./stream_bw   8 50000000 4
 ```
 
@@ -128,7 +139,7 @@ python3 sweep_bw.py stream   # 순차 접근
 ```
 
 `config.py`에서 모든 설정을 관리합니다. 스크립트를 실행하기 전에 이 파일을 편집하세요.
-`config.py`는 git에 추적되지 않는 로컬 파일로, `make` 실행 시 `config_template.py`로부터 자동 생성됩니다 (이미 존재하면 덮어쓰지 않음).
+`config.py`는 git에 추적되지 않는 로컬 파일로, `make config`로 `config_template.py`에서 (재)생성합니다 (**덮어쓰기** — 빌드와 분리된 명시적 부트스트랩 단계).
 
 | 항목 | 상수 | 의미 |
 |---|---|---|
@@ -140,7 +151,7 @@ python3 sweep_bw.py stream   # 순차 접근
 | 스윕 | `ITERS_PER_THREAD` | 스레드당 처리할 총 캐시라인 수 (총 트래픽 = iters × 64B, N 무관) |
 | rand | `LINES_PER_ACCESS` | 접근당 캐시라인 수 `{1,2,4,8,16}` (rand 모드 전용, 기본 1) |
 | rand | `ACCESS_MODE` | 접근 방식: `0`=consecutive(기본), `1`=samebank (rand 모드 전용) |
-| rand | `ADDR_MAP` | `ACCESS_MODE=1`에 사용할 DRAM 주소 매핑 — `address_mapping.SYSTEMS`의 키 |
+| rand | `ADDR_MAP` | `ACCESS_MODE=1`의 **기본** DRAM 주소 매핑 — `address_mapping.SYSTEMS`의 키. 실행 시 `ACCESS_MAP` env로 덮어쓸 수 있음(`sweep_bw.py`는 이 값을 자동 전달) |
 | 기타 | `USE_SUDO` | 1GB hugepage 할당에 sudo가 필요하면 `True` |
 
 이론 피크는 `전송률(MT/s) × 8 B × 채널 수 / 1000` 으로 계산합니다.
@@ -194,6 +205,6 @@ Checksum       : 3f2a1b4c8d9e0f12
   부족하면 `sudo sh -c 'echo N > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'` 로 할당.
 - `randread_bw`의 `hugepages_1gb`는 **2의 거듭제곱**만 허용 (1, 2, 4, 8, …). 그 외 값은 에러로 종료.
 - `lines_per_access`는 `{1, 2, 4, 8, 16}` 중 하나만 허용. 그 외 값은 에러로 종료.
-- `mode=1`(samebank)은 `lines_per_access`가 `ADDR_MAP`이 지원하는 최대값(`access_masks.h`의 `ACCESS_NUM_COL_BITS`로 결정)을 넘으면 에러로 종료.
+- `mode=1`(samebank)은 `lines_per_access`가 선택된 매핑(`ACCESS_MAP` env, 미지정 시 `config.ADDR_MAP`)이 지원하는 최대값(`num_col_bits`로 결정)을 넘으면 에러로 종료. 없는 매핑 이름을 주면 사용 가능한 목록을 출력하고 종료.
 - 16GB 단일 채널 구성이면 DRAM 대역폭 상한이 낮아질 수 있음.
   `sudo dmidecode -t memory` 로 DIMM 수·속도 확인 권장.

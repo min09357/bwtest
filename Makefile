@@ -24,17 +24,20 @@ CXXFLAGS += $(EXTRA_CXXFLAGS)
 
 TARGETS = randread_bw stream_bw
 
-.PHONY: all clean
+.PHONY: all clean config
 
-all: config.py $(TARGETS)
+all: $(TARGETS)
 
-config.py: config_template.py
-	@if [ ! -f config.py ]; then \
-		cp config_template.py config.py; \
-		echo ">> config.py created from config.example.py — review values before running."; \
-	else \
-		touch config.py; \
-	fi
+# config.py is a USER INPUT (chooses the default ADDR_MAP and sweep/hardware
+# settings), not a build artifact — bootstrap it once with `make config`, edit,
+# then build. `make config` overwrites any existing config.py from the template.
+config:
+	@cp config_template.py config.py
+	@echo ">> config.py (re)created from config_template.py — local edits overwritten. Adjust settings, then 'make'."
+
+# If config.py is missing, fail with guidance instead of silently scaffolding.
+config.py:
+	@echo "error: config.py not found. Run 'make config', adjust settings, then 'make'." >&2; exit 1
 
 # access_masks.h is generated from config.ADDR_MAP (address_mapping.py) and
 # consumed by randread_bw's ACCESS_MODE=1 (samebank) access pattern.

@@ -29,7 +29,7 @@ solver below accounts for that.
 # Add new systems here (e.g. SPR configurations) using the same shape.
 
 SYSTEMS = {
-    # DDR5, Arrow Lake (gpu17): 1 channel populated, 1 DPC, 2 ranks, 32GB.
+    # DDR5, Arrow Lake, 1 channel, 1 DPC, 2 ranks, 32GB.
     "arrow_1ch_1dpc_2rank_32gb": {
         "offset_bits": 6,
         "channel":     [0x82600],
@@ -37,6 +37,16 @@ SYSTEMS = {
         "bank_group":  [0x84042100, 0x108404000, 0x210808000],
         "bank":        [0x421090000, 0x240000],
         "row":         0x7fff80000,
+        "column":      0x1bc0,
+    },
+    # DDR5, Arrow Lake, 1 channel, 1 DPC, 1 ranks, 16GB.
+    "arrow_1ch_1dpc_1rank_16gb": {
+        "offset_bits": 6,
+        "channel":     [0x82600],
+        "rank":        [],
+        "bank_group":  [0x42102100, 0x84204000, 0x108408000],
+        "bank":        [0x210850000, 0x210a0000],
+        "row":         0x3fffc0000,
         "column":      0x1bc0,
     },
 }
