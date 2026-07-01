@@ -150,7 +150,8 @@ def main() -> None:
                 continue
 
             pct = round(bw / peak * 100.0, 1)
-            print(f"\r  {ncores:>2} core(s): {elapsed:.2f}s  {bw:.3f} GB/s  {pct:.1f}%")
+            chart = sbw.bar(bw, peak)
+            print(f"\r  {ncores:>2} core(s): {elapsed:.2f}s  {bw:>7.3f} GB/s  {pct:>5.1f}%  {chart}")
 
             full_rows.append([
                 job["pattern"], job["access_mode"], job["mode_label"],
