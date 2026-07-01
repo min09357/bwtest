@@ -8,7 +8,8 @@
 |---|---|---|
 | `randread_bw` | 무작위 read | HPCC RandomAccess POLY LFSR 주소 생성, 캐시라인 단위 random read |
 | `stream_bw` | 순차 read | 스레드별 연속 구간을 캐시라인 stride로 순차 스캔 (STREAM 류) |
-| `sweep_bw.py` | — | 1코어부터 N코어까지 스윕하며 대역폭·이론 DRAM 피크 대비 % 출력 |
+| `sweep_bw.py` | — | 1코어부터 N코어까지 스윕하며 대역폭·이론 DRAM 피크 대비 % 출력 (단일 설정: `config.py`의 `LINES_PER_ACCESS`/`ACCESS_MODE` 고정) |
+| `sweep_matrix.py` | — | `stream` + `rand`(consecutive/samerow) × 모든 `lines_per_access`를 코어 스윕과 함께 한 번에 실행하고, 전체 결과 CSV + 케이스별 최대 대역폭 요약 CSV를 생성 |
 | `config.py` | — | DIMM·NUMA·hugepage·스윕 범위 등 모든 설정을 관리하는 설정 파일 (git 미추적, `make config`로 생성) |
 | `config_template.py` | — | `config.py`의 기본값 템플릿 (git 추적) |
 | `address_mapping.py` | — | 시스템별 DRAM 주소 매핑(채널/랭크/뱅크그룹/뱅크/row/col) 레지스트리 + XOR 마스크 솔버 |
@@ -156,6 +157,49 @@ python3 sweep_bw.py stream   # 순차 접근
 
 이론 피크는 `전송률(MT/s) × 8 B × 채널 수 / 1000` 으로 계산합니다.
 `sudo dmidecode -t memory | grep -E "Speed|Configured"` 로 실제 DIMM 값을 확인해 채우세요.
+
+### 전체 매트릭스 스윕 (sweep_matrix.py)
+
+`sweep_bw.py`가 한 번에 하나의 설정(stream 또는 rand의 특정 `lines_per_access`/`access_mode`)만 스윕하는 것과 달리, `sweep_matrix.py`는 `stream` + `rand` consecutive(`access_mode=0`) + `rand` samerow(`access_mode=1`)를 모든 `lines_per_access ∈ {1,2,4,8,16}` 조합으로, 각각 코어 스윕까지 포함해 **한 번의 실행으로 전부** 측정합니다. 코어 범위·hugepage·NUMA·DIMM 설정은 `sweep_bw.py`와 동일하게 `config.py`를 그대로 읽습니다.
+
+```bash
+python3 sweep_matrix.py                 # 전체 매트릭스 (stream + consecutive + samerow)
+python3 sweep_matrix.py -c              # rand consecutive 생략
+python3 sweep_matrix.py -s              # rand samerow 생략
+python3 sweep_matrix.py -c -s           # stream만
+python3 sweep_matrix.py -o full.csv --summary best.csv   # 출력 경로 지정
+```
+
+| 옵션 | 의미 |
+|---|---|
+| `-c`, `--no-consecutive` | rand + consecutive(`access_mode=0`) 케이스 생략 |
+| `-s`, `--no-samerow` | rand + samerow(`access_mode=1`) 케이스 생략 |
+| `-o`, `--output PATH` | 전체 결과 CSV 경로 (기본 `sweep_full.csv`) |
+| `--summary PATH` | 케이스별 최대 대역폭 요약 CSV 경로 (기본 `sweep_summary.csv`) |
+
+`access_mode=1`은 모든 캐시라인이 같은 channel/rank/bank-group/bank뿐 아니라 **같은 row** 안에서 인접 column만 바뀌는 접근이라, CSV에서는 이 사실을 그대로 드러내도록 `samebank` 대신 `samerow`로 라벨을 붙입니다 (바이너리에 넘기는 `mode` 인자값 자체는 여전히 `1`).
+
+두 CSV의 컬럼은 다음과 같습니다.
+
+**전체 결과** (`sweep_full.csv`) — 케이스 × 코어 수 조합마다 한 행:
+
+```
+pattern,access_mode,mode_label,lines_per_access,cores,elapsed_s,bw_gb_s,pct_peak
+stream,,,,1,0.24,26.61,59.4
+rand,0,consecutive,4,3,0.47,40.56,90.5
+rand,1,samerow,4,4,0.62,41.51,92.7
+```
+
+**요약** (`sweep_summary.csv`) — 케이스마다 코어 스윕 중 최대 대역폭이 나온 시점 한 행:
+
+```
+pattern,access_mode,mode_label,lines_per_access,max_bw_gb_s,pct_peak,cores
+stream,,,,42.95,95.9,5
+rand,0,consecutive,4,41.41,92.4,5
+rand,1,samerow,4,41.51,92.7,6
+```
+
+`lines_per_access`가 선택된 `config.ADDR_MAP`의 최대 column 수를 넘으면 해당 samerow 케이스는 경고와 함께 자동으로 건너뜁니다.
 
 ## 출력 해석
 
