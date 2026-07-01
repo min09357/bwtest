@@ -84,14 +84,21 @@ def probe_simd_width(binary: str) -> str:
     return "unknown"
 
 
-def run_benchmark(cpus: list[int], binary: str, mode: str) -> tuple[float, float]:
+def run_benchmark(
+    cpus: list[int], binary: str, mode: str,
+    lines_per_access: int | None = None, access_mode: int | None = None,
+) -> tuple[float, float]:
     """Run the benchmark binary under numactl and return (elapsed_s, bw_gb_s)."""
+    if lines_per_access is None:
+        lines_per_access = cfg.LINES_PER_ACCESS
+    if access_mode is None:
+        access_mode = cfg.ACCESS_MODE
     cpulist = ",".join(map(str, cpus))
-    # samebank (ACCESS_MODE=1) picks its DRAM mapping at runtime via ACCESS_MAP,
+    # samebank (access_mode=1) picks its DRAM mapping at runtime via ACCESS_MAP,
     # so the sweep always uses config.ADDR_MAP regardless of the binary's baked-in
     # default — no recompile needed to switch mappings.
     env = dict(os.environ)
-    pass_map = mode == "rand" and cfg.ACCESS_MODE == 1
+    pass_map = mode == "rand" and access_mode == 1
     if pass_map:
         env["ACCESS_MAP"] = cfg.ADDR_MAP
     cmd = []
@@ -106,8 +113,8 @@ def run_benchmark(cpus: list[int], binary: str, mode: str) -> tuple[float, float
         binary, str(len(cpus)), str(cfg.ITERS_PER_THREAD), str(cfg.HUGEPAGES_1GB),
     ]
     if mode == "rand":
-        cmd.append(str(cfg.LINES_PER_ACCESS))
-        cmd.append(str(cfg.ACCESS_MODE))
+        cmd.append(str(lines_per_access))
+        cmd.append(str(access_mode))
 
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if result.returncode != 0:
