@@ -18,7 +18,7 @@ NUMA_NODE = 0
 # Number of 1GB hugepages to allocate as the benchmark region.
 # - For randread_bw: must be a power of 2 (1, 2, 4, 8, ...) due to LFSR masking.
 # - For stream_bw: any positive integer is fine.
-# Check available pages with: grep HugePages /proc/meminfo
+# Check available pages with: grep -i huge /proc/meminfo
 # Allocate with: sudo sh -c 'echo N > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages'
 
 HUGEPAGES_1GB = 4
