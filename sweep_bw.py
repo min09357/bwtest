@@ -98,6 +98,7 @@ def run_benchmark(cpus: list[int], binary: str, mode: str) -> tuple[float, float
     ]
     if mode == "rand":
         cmd.append(str(cfg.LINES_PER_ACCESS))
+        cmd.append(str(cfg.ACCESS_MODE))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -131,6 +132,17 @@ def main() -> None:
             sys.exit(
                 f"config.LINES_PER_ACCESS={lpa} must be one of {{1,2,4,8,16}}."
             )
+        if cfg.ACCESS_MODE not in (0, 1):
+            sys.exit(
+                f"config.ACCESS_MODE={cfg.ACCESS_MODE} must be 0 (consecutive) or 1 (samebank)."
+            )
+        if cfg.ACCESS_MODE == 1:
+            import address_mapping as am
+            if cfg.ADDR_MAP not in am.SYSTEMS:
+                sys.exit(
+                    f"config.ADDR_MAP={cfg.ADDR_MAP!r} not found in address_mapping.SYSTEMS "
+                    f"(available: {', '.join(sorted(am.SYSTEMS))})."
+                )
 
     node_cpus = numa_node_cpus(cfg.NUMA_NODE)
     max_cores = min(cfg.CORE_MAX if cfg.CORE_MAX is not None else len(node_cpus), len(node_cpus))
@@ -155,6 +167,9 @@ def main() -> None:
     print(f"  Hugepages   : {cfg.HUGEPAGES_1GB} × 1GB  ({cfg.HUGEPAGES_1GB} GB region)")
     if mode == "rand":
         print(f"  Lines/access: {cfg.LINES_PER_ACCESS}  ({cfg.LINES_PER_ACCESS * 64} B/access)")
+        access_label = "consecutive" if cfg.ACCESS_MODE == 0 else "samebank"
+        addr_map_note = f"  (addr_map={cfg.ADDR_MAP})" if cfg.ACCESS_MODE == 1 else ""
+        print(f"  Access mode : {cfg.ACCESS_MODE} ({access_label}){addr_map_note}")
     print(f"  Binary      : {binary}")
     print(f"  SIMD width  : {simd_width}")
     print("=" * 65)

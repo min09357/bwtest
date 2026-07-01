@@ -2,4 +2,5 @@ randread_bw
 stream_bw
 .claude/
 config.py
+access_masks.h
 __pycache__/

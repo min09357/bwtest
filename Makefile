@@ -36,11 +36,16 @@ config.py: config_template.py
 		touch config.py; \
 	fi
 
-randread_bw: randread_bw.cpp bw_width.h
+# access_masks.h is generated from config.ADDR_MAP (address_mapping.py) and
+# consumed by randread_bw's ACCESS_MODE=1 (samebank) access pattern.
+access_masks.h: gen_access_masks.py address_mapping.py config.py
+	python3 gen_access_masks.py -o $@
+
+randread_bw: randread_bw.cpp bw_width.h access_masks.h
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 stream_bw: stream_bw.cpp bw_width.h
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(TARGETS) access_masks.h

@@ -37,6 +37,18 @@ ITERS_PER_THREAD = 100_000_000   # passed as 2nd arg to the binary
 # iters_per_thread counts total 64B cachelines, so total traffic is N-independent.
 LINES_PER_ACCESS = 1
 
+# How the LINES_PER_ACCESS cachelines of one random access are chosen (rand mode only):
+#   0 = consecutive : addr, addr+64, addr+128, ...           (classic; N-independent traffic)
+#   1 = samebank    : addr XOR'd with per-column-bit masks so all LINES_PER_ACCESS
+#                     cachelines land in the same channel/rank/bank-group/bank/row,
+#                     at adjacent columns (row-buffer-hit access pattern).
+#                     Requires LINES_PER_ACCESS <= max columns supported by ADDR_MAP below.
+ACCESS_MODE = 0
+
+# DRAM address mapping used by ACCESS_MODE=1 — a key into address_mapping.SYSTEMS.
+# See address_mapping.py to add mappings for other systems/configurations.
+ADDR_MAP = "arrow_1ch_1dpc_2rank_32gb"
+
 # ─── Misc ────────────────────────────────────────────────────────────────────
 
 # Set to True if the binary needs sudo to allocate 1GB hugepages
