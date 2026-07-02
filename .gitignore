@@ -6,3 +6,4 @@ access_masks.h
 __pycache__/
 CLAUDE.md
 *.csv
+results/
