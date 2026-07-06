@@ -99,6 +99,26 @@ SYSTEMS = {
         "row":         0x7fff80000,
         "column":      0x3e080,
     },
+    # DDR5, Intel Sapphire Rapids (scal33), 1 channel, 1 DPC, 1 rank, 32GB.
+    "spr_1ch_1dpc_1rank_32gb": {
+        "offset_bits": 6,
+        "channel":     [0x40],
+        "rank":        [],
+        "bank_group":  [0x8000080, 0x10000100, 0x80000200],
+        "bank":        [0x20000400, 0x40000800],
+        "row":         0x7fff80000,
+        "column":      0x7f000,
+    },
+    # DDR5, Intel Sapphire Rapids (scal33), 1 channel, 1 DPC, 2 ranks, 64GB.
+    "spr_1ch_1dpc_2rank_64gb": {
+        "offset_bits": 6,
+        "channel":     [0x40],
+        "rank":        [0x80],
+        "bank_group":  [0x10000100, 0x20000200, 0x100001400],
+        "bank":        [0x40000800, 0x80001000],
+        "row":         0xffff00000,
+        "column":      0xfe000,
+    },
 }
 
 
