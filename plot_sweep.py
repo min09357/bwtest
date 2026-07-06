@@ -19,6 +19,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+COLOR_STREAM = "tab:orange"
+COLOR_RANDOM_CONSECUTIVE = "tab:blue"
+COLOR_RANDOM_SAMEROW = "yellowgreen"
+
 TREFI_NS = 1950.0
 TRFC_NS = 160.0
 REFRESH_CAP = (TREFI_NS - TRFC_NS) / TREFI_NS * 100.0
@@ -43,13 +47,13 @@ def load(csv_path: Path) -> pd.DataFrame:
 def plot_cores(df: pd.DataFrame, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    stream = df[df["pattern"] == "stream"].sort_values("cores")
-    if not stream.empty:
-        ax.plot(stream["cores"], stream["pct_peak"], marker="o", label="Stream")
-
     cons = df[(df["pattern"] == "rand") & (df["access_mode"] == 0) & (df["lines_per_access"] == 1)].sort_values("cores")
     if not cons.empty:
-        ax.plot(cons["cores"], cons["pct_peak"], marker="s", label="Random")
+        ax.plot(cons["cores"], cons["pct_peak"], marker="s", color=COLOR_RANDOM_CONSECUTIVE, label="Random")
+
+    stream = df[df["pattern"] == "stream"].sort_values("cores")
+    if not stream.empty:
+        ax.plot(stream["cores"], stream["pct_peak"], marker="o", color=COLOR_STREAM, label="Stream")
 
     ax.axhline(REFRESH_CAP, color="red", linestyle="--", linewidth=2.5,
                label=f"All-bank refresh cap ({REFRESH_CAP:.1f}%)")
@@ -72,18 +76,20 @@ def plot_lpa(df: pd.DataFrame, out_path: Path, include_samerow: bool) -> None:
     cons = df[(df["pattern"] == "rand") & (df["access_mode"] == 0)]
     if not cons.empty:
         cons_best = cons.groupby("lines_per_access")["pct_peak"].max().sort_index()
-        ax.plot(cons_best.index, cons_best.values, marker="s", label="Random max (consecutive address)")
+        ax.plot(cons_best.index, cons_best.values, marker="s", color=COLOR_RANDOM_CONSECUTIVE,
+                label="Random max (consecutive address)")
 
     if include_samerow:
         same = df[(df["pattern"] == "rand") & (df["access_mode"] == 1)]
         if not same.empty:
             same_best = same.groupby("lines_per_access")["pct_peak"].max().sort_index()
-            ax.plot(same_best.index, same_best.values, marker="^", label="Random max (same row)")
+            ax.plot(same_best.index, same_best.values, marker="^", color=COLOR_RANDOM_SAMEROW,
+                    label="Random max (same row)")
 
     stream = df[df["pattern"] == "stream"]
     if not stream.empty:
         stream_max = stream["pct_peak"].max()
-        ax.axhline(stream_max, color="orange", linestyle="--", linewidth=1.8,
+        ax.axhline(stream_max, color=COLOR_STREAM, linestyle="--", linewidth=1.8,
                    label=f"Stream max ({stream_max:.1f}%)")
 
     ax.axhline(REFRESH_CAP, color="red", linestyle="--", linewidth=2.5,
