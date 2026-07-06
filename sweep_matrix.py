@@ -43,10 +43,10 @@ def parse_args() -> argparse.Namespace:
                    help="skip rand+consecutive (access_mode=0) cases")
     p.add_argument("-s", "--no-samerow", action="store_true",
                    help="skip rand+samerow (access_mode=1) cases")
-    p.add_argument("-o", "--output", default="sweep_full.csv",
-                   help="full-matrix CSV path (default: sweep_full.csv)")
-    p.add_argument("--summary", default="sweep_summary.csv",
-                   help="per-case best-result CSV path (default: sweep_summary.csv)")
+    p.add_argument("-o", "--output", default="results/sweep_full.csv",
+                   help="full-matrix CSV path (default: results/sweep_full.csv)")
+    p.add_argument("--summary", default="results/sweep_summary.csv",
+                   help="per-case best-result CSV path (default: results/sweep_summary.csv)")
     return p.parse_args()
 
 
@@ -166,6 +166,11 @@ def main() -> None:
                 job["lines_per_access"], best[0], best[1], best[2],
             ])
         print()
+
+    for path in (args.output, args.summary):
+        out_dir = os.path.dirname(path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
 
     with open(args.output, "w", newline="") as f:
         w = csv.writer(f)

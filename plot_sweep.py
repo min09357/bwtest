@@ -8,7 +8,7 @@ Generates three PNGs next to the input CSV:
   <stem>_lpa_consecutive.png    : lines_per_access vs best utilization (consecutive only)
 
 Usage:
-  python3 plot_sweep.py [sweep_full.csv]
+  python3 plot_sweep.py [results/sweep_full.csv]
 """
 
 import sys
@@ -109,7 +109,7 @@ def plot_lpa(df: pd.DataFrame, out_path: Path, include_samerow: bool) -> None:
 
 
 def main() -> None:
-    csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("sweep_full.csv")
+    csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("results/sweep_full.csv")
     if not csv_path.is_file():
         sys.exit(f"CSV not found: {csv_path}")
 
