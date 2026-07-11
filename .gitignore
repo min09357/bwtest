@@ -11,5 +11,5 @@ CLAUDE.md
 *.csv
 results/
 *.png
-*.sh
+
 tmp/
