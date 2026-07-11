@@ -31,8 +31,7 @@
 
 | 항목 | 결정 |
 |---|---|
-| 주소 생성 | HPCC POLY Galois LFSR, 스트림별 skip-ahead(`hpcc_starts`) |
-| 스트림 수 | `ncores × 16` (스레드당 16개 독립 스트림 → MLP 극대화) |
+| 주소 생성 | HPCC POLY Galois LFSR, 스레드당 단일 스트림; 스레드별 skip-ahead(`hpcc_starts`)로 수열 구간 비중첩 |
 | 접근 granularity | `lines_per_access` 캐시라인을 한 번에 fetch (`mode`로 배치 방식 선택, 아래 참고) |
 | 다중 라인 unroll | `thread_func<LINES, MODE>` 템플릿으로 N·MODE를 컴파일 타임 상수화; 내부 k-루프가 -O3에서 완전 unroll되어 런타임 분기 없음. `main`에서 `switch`+분기로 한 번만 디스패치 |
 | 총 트래픽 | `iters_per_thread × 64 B` (N·mode 무관 고정) — 같은 iters로 granularity·mode만 바꾸면 공정 비교 가능 |
@@ -57,7 +56,7 @@ ACCESS_MAP=arrow_1ch_1dpc_2rank_32gb numactl -C 0 -m 0 ./randread_bw 4 100000000
 없는 이름을 주면 사용 가능한 매핑 목록을 출력하고 종료합니다. `mode=1`이 지원하는 최대 `lines_per_access`는 선택된 매핑의 column 폭(`num_col_bits`)에 따라 결정되며, 이를 초과하면 실행 시 에러로 종료합니다.
 
 #### 주소 충돌에 대하여
-스트림마다 64비트 `ran` 수열 구간은 겹치지 않지만, 하위 비트 인덱스가 같아 **캐시라인 주소가 코어 간·반복 간 겹칠 수 있습니다.**
+스레드마다 64비트 `ran` 수열 구간은 겹치지 않지만, 하위 비트 인덱스가 같아 **캐시라인 주소가 코어 간·반복 간 겹칠 수 있습니다.**
 이는 의도된 동작입니다. read 전용이라 coherence 비용이 없고, 작업집합이 일반적으로 L3(64MB)를 크게 초과하여 재방문해도 대부분 DRAM 접근으로 이어져 측정이 유효합니다.
 
 ### stream_bw 전용
@@ -121,7 +120,7 @@ numactl -C 0,2,4,6,8,10,12,14 -m 0 ./stream_bw   8 50000000 4
 ```
 
 - `ncores`: 사용할 코어 수 (기본 16).
-- `iters_per_thread`: 스레드당 처리할 총 64B 캐시라인 수 (기본 1억). `randread_bw`는 `UNROLL(16) × lines_per_access` 배수로 내림 조정됨. 총 트래픽은 `iters × 64B`로 `lines_per_access`/`mode`와 무관하게 고정.
+- `iters_per_thread`: 스레드당 처리할 총 64B 캐시라인 수 (기본 1억). `randread_bw`는 `lines_per_access` 배수로 내림 조정됨. 총 트래픽은 `iters × 64B`로 `lines_per_access`/`mode`와 무관하게 고정.
 - `hugepages_1gb`: 할당할 1GB hugepage 수 (기본 4). `randread_bw`는 **반드시 2의 거듭제곱**(1, 2, 4, 8, …)이어야 함 (LFSR 마스크 주소 방식 제약). `stream_bw`는 임의의 양수 가능.
 - `lines_per_access` (`randread_bw` 전용, 기본 1): 한 번의 무작위 접근에서 fetch할 캐시라인 수. 허용값 `{1, 2, 4, 8, 16}`. 접근 횟수 = `iters / lines_per_access`.
 - `mode` (`randread_bw` 전용, 기본 0): `lines_per_access`개 캐시라인의 배치 방식.
@@ -204,7 +203,7 @@ rand,1,samerow,4,41.51,92.7,6
 ## 출력 해석
 
 ```
-ncores=16  iters/thread=100000000  streams=256  region=4 GB  lines/access=1 (64 B)  mode=0 (consecutive)  simd=256 (AVX2)
+ncores=16  iters/thread=100000000  region=4 GB  lines/access=1 (64 B)  mode=0 (consecutive)  simd=256 (AVX2)
 Warming up 4 GB ... done
 ```
 

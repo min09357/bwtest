@@ -1,10 +1,15 @@
 randread_bw
 stream_bw
+latency_bw
+hugepage_addr
 .claude/
 config.py
 access_masks.h
+decode_masks.h
 __pycache__/
 CLAUDE.md
 *.csv
 results/
 *.png
+*.sh
+tmp/

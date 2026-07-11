@@ -222,16 +222,27 @@ def _bank_functions(s: dict) -> list:
     return list(s["channel"]) + list(s["rank"]) + list(s["bank_group"]) + list(s["bank"])
 
 
-def col_step_masks(system: str, max_bits: int | None = None) -> list:
-    """Compute, for each column bit (ascending, LSB-first), the smallest XOR
-    mask that flips exactly that column bit while leaving channel, rank,
-    bank_group, bank and row unchanged.
+def col_step_masks(system: str, max_bits: int | None = None,
+                   high: bool = False) -> list:
+    """Compute, for each selected column bit, the smallest XOR mask that flips
+    exactly that column bit while leaving channel, rank, bank_group, bank and
+    row unchanged.
 
-    Returns a list of masks; mask[i] toggles column bit i only. Combining
-    masks for the set bits of d (0 <= d < 2**len(masks)) via XOR yields the
-    mask that steps the column by d while staying in the same bank/row:
+    high=False (default): the LOWEST column bits, LSB-first. mask[i] toggles
+    column bit i, so stepping the column by d hits ADJACENT columns:
 
         step_mask(d) = XOR of mask[i] for each bit i set in d
+
+    high=True: the HIGHEST column bits, topmost-first. mask[0] toggles the
+    top column bit, mask[1] the next, etc. Stepping by d then varies the
+    upper column bits, so the visited columns are FAR APART within the same
+    bank/row (used by randread_bw's mode 2 "spread" pattern). Choosing the
+    top bits topmost-first makes "the upper log2(N) column bits differ" hold
+    for every lines_per_access N in {2,4,8,16}.
+
+    Returns a list of masks; combine the masks for the set bits of d
+    (0 <= d < 2**len(masks)) via XOR to step the column while staying in the
+    same bank/row.
 
     If a column bit's bank-function signature cannot be cancelled using the
     available slack bits, the list stops there (columns beyond that point
@@ -244,6 +255,8 @@ def col_step_masks(system: str, max_bits: int | None = None) -> list:
     col_mask = s["column"]
 
     col_bits = [i for i in range(64) if (col_mask >> i) & 1]
+    if high:
+        col_bits.reverse()  # highest physical column bit first
     if max_bits is not None:
         col_bits = col_bits[:max_bits]
 

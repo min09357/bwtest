@@ -22,7 +22,11 @@ endif
 # Escape hatch for extra arch/codegen flags (e.g. -mavx512f when forcing 512).
 CXXFLAGS += $(EXTRA_CXXFLAGS)
 
-TARGETS = randread_bw stream_bw latency_bw hugepage_addr
+# This Temp/ tree is a randread-focused subset: randread_bw.cpp and stream_bw.cpp
+# are present, but latency_bw.cpp / hugepage_addr.cpp (and gen_decode_masks.py)
+# live only in the parent project, so `all` builds randread_bw + stream_bw. The
+# rules below for the other binaries are kept for reference but are not built here.
+TARGETS = randread_bw stream_bw
 
 .PHONY: all clean config
 

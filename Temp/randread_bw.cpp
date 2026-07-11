@@ -11,13 +11,16 @@
 //       cachelines fetched per thread; address-generation count = iters_per_thread / lines_per_access.
 //       mode selects how those lines_per_access cachelines are placed (default 0):
 //         0 = consecutive : addr, addr+64, addr+128, ... (block-aligned to lines_per_access*64B)
-//         1 = samebank    : addr XOR'd with access_masks.h's per-column-bit masks, so all
+//         1 = samebank    : addr XOR'd with access_masks.h's LOW per-column-bit masks, so all
 //                           lines land in the same channel/rank/bank-group/bank/row at
-//                           adjacent columns (row-buffer-hit pattern). The DRAM mapping is
-//                           picked at runtime via the ACCESS_MAP env var (unset -> the
-//                           compiled-in default ACCESS_DEFAULT_MAP == config.ADDR_MAP); all
-//                           registered maps are in access_masks.h (gen_access_masks.py).
-//                           Requires lines_per_access <= 2**num_col_bits for the chosen map.
+//                           ADJACENT columns (row-buffer-hit pattern; lower column bits vary).
+//         2 = spread      : like mode 1 but XOR'd with the HIGH per-column-bit masks, so the
+//                           lines land in the same channel/rank/bank-group/bank/row but at
+//                           FAR-APART columns (upper column bits vary).
+//       For mode 1 and 2 the DRAM mapping is picked at runtime via the ACCESS_MAP env var
+//       (unset -> the compiled-in default ACCESS_DEFAULT_MAP == config.ADDR_MAP); all
+//       registered maps are in access_masks.h (gen_access_masks.py).
+//       Requires lines_per_access <= 2**num_col_bits for the chosen map/mode.
 
 #include <barrier>
 #include <thread>
@@ -87,15 +90,17 @@ struct ThreadArg {
     uint8_t *base;
     int64_t  L;          // address-generation iterations per thread (= iters_per_thread / LINES)
     uint64_t mask;       // block index mask: MODE 0 -> nblk-1 (nblk = ncl/LINES); MODE 1 -> ncl-1
-    const uint64_t *col_masks;  // MODE 1 only: col_masks[d] steps the column by d (same bank/row); nullptr for MODE 0
+    const uint64_t *col_masks;  // MODE 1 (mode 1/2) only: col_masks[d] steps the column by d (same bank/row); nullptr for MODE 0
     uint64_t sink_out;   // accumulated read data; returned to main to prevent DCE
 };
 
 // LINES is a compile-time constant; the inner k-loop is fully unrolled by -O3,
 // leaving no loop-branch overhead in the hot path.
 // MODE selects the access pattern: 0 = consecutive cachelines, 1 = same-bank/row
-// adjacent columns via XOR masks (access_masks.h). Templating on MODE keeps the
-// unused branch out of the compiled hot path entirely.
+// columns via XOR masks (access_masks.h). Runtime modes 1 (samebank/adjacent) and
+// 2 (spread/far-apart) share MODE==1 here — they differ only in which column-step
+// masks the caller loaded into col_masks[]. Templating on MODE keeps the unused
+// branch out of the compiled hot path entirely.
 template <int LINES, int MODE>
 static void thread_func(ThreadArg &a, std::barrier<> &bar) {
     // CPU affinity is set externally by numactl -C / -m before process launch.
@@ -226,15 +231,19 @@ int main(int argc, char *argv[]) {
             lines_per_access);
         return 1;
     }
-    if (mode != 0 && mode != 1) {
-        std::fprintf(stderr, "error: mode=%d must be 0 (consecutive) or 1 (samebank)\n", mode);
+    if (mode != 0 && mode != 1 && mode != 2) {
+        std::fprintf(stderr, "error: mode=%d must be 0 (consecutive), 1 (samebank) or 2 (spread)\n", mode);
         return 1;
     }
 
-    // MODE 1 selects a DRAM mapping (compiled into access_masks.h for every
+    // Modes 1 and 2 select a DRAM mapping (compiled into access_masks.h for every
     // registered system) at runtime via the ACCESS_MAP env var; unset -> default.
+    // mode 1 steps ADJACENT columns (low masks); mode 2 steps FAR-APART columns
+    // (high masks). col_steps/num_col_bits below point at the chosen set.
     const AccessMap *sel = nullptr;
-    if (mode == 1) {
+    const uint64_t  *col_steps = nullptr;   // per-column-bit step masks for the active mode
+    int              num_col_bits = 0;
+    if (mode == 1 || mode == 2) {
         const char *want = std::getenv("ACCESS_MAP");
         if (!want || !*want) want = ACCESS_DEFAULT_MAP;
         for (int i = 0; i < ACCESS_NUM_MAPS; i++)
@@ -246,12 +255,14 @@ int main(int argc, char *argv[]) {
             std::fprintf(stderr, "\n");
             return 1;
         }
-        if (lines_per_access > (1 << sel->num_col_bits)) {
+        if (mode == 1) { col_steps = sel->col_step_mask_low;  num_col_bits = sel->num_col_bits_low; }
+        else           { col_steps = sel->col_step_mask_high; num_col_bits = sel->num_col_bits_high; }
+        if (lines_per_access > (1 << num_col_bits)) {
             std::fprintf(stderr,
-                "error: lines_per_access=%d exceeds max %d supported by ADDR_MAP=%s "
+                "error: lines_per_access=%d exceeds max %d supported by ADDR_MAP=%s in mode %d "
                 "(num_col_bits=%d); pick a mapping with more column bits (ACCESS_MAP=...) "
                 "or reduce lines_per_access\n",
-                lines_per_access, 1 << sel->num_col_bits, sel->name, sel->num_col_bits);
+                lines_per_access, 1 << num_col_bits, sel->name, mode, num_col_bits);
             return 1;
         }
     }
@@ -261,14 +272,15 @@ int main(int argc, char *argv[]) {
     uint64_t nblk  = ncl / static_cast<uint64_t>(lines_per_access);  // aligned blocks (MODE 0)
     uint64_t mask  = (mode == 0) ? (nblk - 1) : (ncl - 1);
 
-    // MODE 1: precompute the XOR mask that steps the column by d, for every
-    // d in [0, lines_per_access). col_masks[0] is always 0 (no shift).
+    // Modes 1/2: precompute the XOR mask that steps the column by d, for every
+    // d in [0, lines_per_access). col_masks[0] is always 0 (no shift). col_steps
+    // points at the low (mode 1, adjacent) or high (mode 2, spread) step masks.
     uint64_t col_masks[16] = {0};
-    if (mode == 1) {
+    if (mode == 1 || mode == 2) {
         for (int d = 0; d < lines_per_access; d++) {
             uint64_t m = 0;
-            for (int b = 0; b < sel->num_col_bits; b++)
-                if ((d >> b) & 1) m ^= sel->col_step_mask[b];
+            for (int b = 0; b < num_col_bits; b++)
+                if ((d >> b) & 1) m ^= col_steps[b];
             col_masks[d] = m;
         }
     }
@@ -278,12 +290,13 @@ int main(int argc, char *argv[]) {
     iters_per_thread = (iters_per_thread / round) * round;
     int64_t L = iters_per_thread / lines_per_access;  // address-gen iters per thread
 
+    const char *mode_name = (mode == 0) ? "consecutive" : (mode == 1) ? "samebank" : "spread";
     std::printf("ncores=%d  iters/thread=%lld  region=%d GB  lines/access=%d (%d B)  "
         "mode=%d (%s)%s%s  simd=%s\n",
         ncores, (long long)iters_per_thread,
         hugepages_1gb, lines_per_access, lines_per_access * 64,
-        mode, mode == 0 ? "consecutive" : "samebank",
-        mode == 1 ? "  addr_map=" : "", mode == 1 ? sel->name : "",
+        mode, mode_name,
+        sel ? "  addr_map=" : "", sel ? sel->name : "",
         BW_SIMD_WIDTH_STR);
 
     // Allocate hugepages_1gb × 1GB hugepages
