@@ -1,1 +1,2 @@
-sudo insmod ../CoreFreq/build/corefreqk.ko && sudo ../CoreFreq/build/corefreqd
+sudo insmod ../CoreFreq/build/corefreqk.ko
+sudo ../CoreFreq/build/corefreqd
