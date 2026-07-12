@@ -129,6 +129,26 @@ SYSTEMS = {
         "row":         0xffff00000,
         "column":      0xfe000,
     },
+    # DDR4, Intel Cascade Lake (scal23), 1 channel, 1 DPC, 2 ranks, 32GB.
+    "cascade_1ch_1dpc_2rank_32gb": {
+        "offset_bits": 6,
+        "channel":     [],
+        "rank":        [0x2000],
+        "bank_group":  [0x40, 0x40000],
+        "bank":        [0x80000, 0x100000],
+        "row":         0x7ffe38000,
+        "column":      0x5f80,
+    },
+    # DDR4, Intel Cascade Lake (scal23), 1 channel, 1 DPC, 2 ranks, 32GB.
+    "cascade_1ch_1dpc_1rank_16gb": {
+        "offset_bits": 6,
+        "channel":     [],
+        "rank":        [],
+        "bank_group":  [0x40, 0x20000],
+        "bank":        [0x40000, 0x80000],
+        "row":         0x3fff1c000,
+        "column":      0x3f80,
+    },
 }
 
 
