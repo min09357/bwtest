@@ -89,6 +89,16 @@ SYSTEMS = {
         "row":         0x3fffc0000,
         "column":      0xfc0,
     },
+    # DDR5, Alder Lake (alder02), 1 channel, 1 DPC, 1 rank, 16GB.
+    "alder_1ch_1dpc_1rank_16gb-2": {
+        "offset_bits": 6,
+        "channel":     [0x42300],
+        "rank":        [],
+        "bank_group":  [0x81100, 0x88440000, 0x111108000],
+        "bank":        [0x222210000, 0x44420000],
+        "row":         0x3fffc0000,
+        "column":      0xfc0,
+    },
     # DDR5, AMD Zen4 (7950X), 1 channel, 1 DPC, 1 rank, 16GB.
     "zen4_1ch_1dpc_1rank_16gb": {
         "offset_bits": 6,
