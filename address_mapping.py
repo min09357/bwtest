@@ -72,19 +72,19 @@ SYSTEMS = {
     # DDR5, Raptor Lake, 1 channel, 1 DPC, 1 ranks, 16GB.
     "raptor_1ch_1dpc_1rank_16gb": {
         "offset_bits": 6,
-        "channel":     [0x82600],
+        "channel":     [0xc3200],
         "rank":        [],
-        "bank_group":  [0x42102100, 0x84204000, 0x108408000],
-        "bank":        [0x210850000, 0x210a0000],
+        "bank_group":  [0x81100, 0x888440000, 0x111108000],
+        "bank":        [0x222210000, 0x44420000],
         "row":         0x3fffc0000,
-        "column":      0x1bc0,
+        "column":      0xfc0,
     },
     # DDR5, Alder Lake (alder02), 1 channel, 1 DPC, 1 rank, 16GB.
     "alder_1ch_1dpc_1rank_16gb": {
         "offset_bits": 6,
         "channel":     [0xc3200],
         "rank":        [],
-        "bank_group":  [0x81100, 0x88440000, 0x111108000],
+        "bank_group":  [0x81100, 0x888440000, 0x111108000],
         "bank":        [0x222210000, 0x44420000],
         "row":         0x3fffc0000,
         "column":      0xfc0,
