@@ -62,21 +62,31 @@ SYSTEMS = {
     # DDR5, Raptor Lake, 1 channel, 1 DPC, 2 ranks, 32GB.
     "raptor_1ch_1dpc_2rank_32gb": {
         "offset_bits": 6,
-        "channel":     [0x82600],
-        "rank":        [0x42120000],
-        "bank_group":  [0x84042100, 0x108404000, 0x210808000],
-        "bank":        [0x421090000, 0x240000],
-        "row":         0x7fff80000,
-        "column":      0x1bc0,
+        "channel":     [0xc3200],
+        "rank":        [0x410000],
+        "bank_group":  [0x81100, 0x444208000, 0x222104000],
+        "bank":        [0x088820000,  0x111040000],
+        "row":         0x7fffc0000,
+        "column":      0xfc0,
     },
     # DDR5, Raptor Lake, 1 channel, 1 DPC, 1 ranks, 16GB.
     "raptor_1ch_1dpc_1rank_16gb": {
         "offset_bits": 6,
         "channel":     [0xc3200],
         "rank":        [],
-        "bank_group":  [0x81100, 0x888440000, 0x111108000],
+        "bank_group":  [0x81100, 0x88844000, 0x111108000],
         "bank":        [0x222210000, 0x44420000],
         "row":         0x3fffc0000,
+        "column":      0xfc0,
+    },
+    # DDR5, Alder Lake (alder02), 1 channel, 1 DPC, 2 rank, 32GB.
+    "alder_1ch_1dpc_2rank_32gb": {
+        "offset_bits": 6,
+        "channel":     [0xc3200],
+        "rank":        [0x410000],
+        "bank_group":  [0x81100, 0x444208000, 0x222104000],
+        "bank":        [0x088820000,  0x111040000],
+        "row":         0x7fffc0000,
         "column":      0xfc0,
     },
     # DDR5, Alder Lake (alder02), 1 channel, 1 DPC, 1 rank, 16GB.
@@ -84,7 +94,7 @@ SYSTEMS = {
         "offset_bits": 6,
         "channel":     [0xc3200],
         "rank":        [],
-        "bank_group":  [0x81100, 0x888440000, 0x111108000],
+        "bank_group":  [0x81100, 0x88844000, 0x111108000],
         "bank":        [0x222210000, 0x44420000],
         "row":         0x3fffc0000,
         "column":      0xfc0,
