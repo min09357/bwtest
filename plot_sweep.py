@@ -2,10 +2,11 @@
 """
 Plot bandwidth-utilization graphs from sweep_matrix.py's full CSV output.
 
-Generates three PNGs next to the input CSV:
+Generates four PNGs next to the input CSV:
   <stem>_cores.png             : cores vs utilization (stream, random @ LPA=1)
   <stem>_lpa.png                : lines_per_access vs best utilization (consecutive + samerow)
   <stem>_lpa_consecutive.png    : lines_per_access vs best utilization (consecutive only)
+  <stem>_lpa_samerow.png        : lines_per_access vs best utilization (same row only)
 
 Usage:
   python3 plot_sweep.py [results/sweep_full.csv]
@@ -70,14 +71,16 @@ def plot_cores(df: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
-def plot_lpa(df: pd.DataFrame, out_path: Path, include_samerow: bool) -> None:
+def plot_lpa(df: pd.DataFrame, out_path: Path, include_consecutive: bool = True,
+             include_samerow: bool = True) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    cons = df[(df["pattern"] == "rand") & (df["access_mode"] == 0)]
-    if not cons.empty:
-        cons_best = cons.groupby("lines_per_access")["pct_peak"].max().sort_index()
-        ax.plot(cons_best.index, cons_best.values, marker="s", color=COLOR_RANDOM_CONSECUTIVE,
-                label="Random max (consecutive address)")
+    if include_consecutive:
+        cons = df[(df["pattern"] == "rand") & (df["access_mode"] == 0)]
+        if not cons.empty:
+            cons_best = cons.groupby("lines_per_access")["pct_peak"].max().sort_index()
+            ax.plot(cons_best.index, cons_best.values, marker="s", color=COLOR_RANDOM_CONSECUTIVE,
+                    label="Random max (consecutive address)")
 
     if include_samerow:
         same = df[(df["pattern"] == "rand") & (df["access_mode"] == 1)]
@@ -124,14 +127,17 @@ def main() -> None:
     cores_out = csv_path.with_name(csv_path.stem + "_cores.png")
     lpa_out = csv_path.with_name(csv_path.stem + "_lpa.png")
     lpa_cons_out = csv_path.with_name(csv_path.stem + "_lpa_consecutive.png")
+    lpa_same_out = csv_path.with_name(csv_path.stem + "_lpa_samerow.png")
 
     plot_cores(df, cores_out)
-    plot_lpa(df, lpa_out, include_samerow=True)
+    plot_lpa(df, lpa_out)
     plot_lpa(df, lpa_cons_out, include_samerow=False)
+    plot_lpa(df, lpa_same_out, include_consecutive=False)
 
     print(f"Wrote {cores_out}")
     print(f"Wrote {lpa_out}")
     print(f"Wrote {lpa_cons_out}")
+    print(f"Wrote {lpa_same_out}")
 
 
 if __name__ == "__main__":
