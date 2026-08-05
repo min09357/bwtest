@@ -41,21 +41,13 @@
 #include <unistd.h>
 
 #include "decode_masks.h"
-
-#ifndef MAP_HUGE_SHIFT
-#define MAP_HUGE_SHIFT 26
-#endif
-#ifndef MAP_HUGE_1GB
-#define MAP_HUGE_1GB (30 << MAP_HUGE_SHIFT)
-#endif
+// parity64(), phys_to_dram() and Pagemap live here, shared with the hugepage
+// allocator used by randread_bw/stream_bw.
+#include "hugepage_alloc.h"
 
 // ─────────────────────────────────────────────────────────────────────────
 // decode(): C++ port of address_mapping.py's decode()/_parity()/_bits_value()
 // ─────────────────────────────────────────────────────────────────────────
-
-static inline int parity64(uint64_t x) {
-    return __builtin_popcountll(x) & 1;
-}
 
 // Gather the bits set in `mask` from `addr`, packed LSB-first in ascending
 // physical-bit order — mirrors address_mapping._bits_value().
@@ -69,19 +61,6 @@ static inline uint64_t bits_gather(uint64_t addr, uint64_t mask) {
         }
     }
     return value;
-}
-
-// System physical address (what /proc/self/pagemap reports) -> the address the
-// memory controller actually decodes. The BIOS maps DRAM around the sub-4GB
-// MMIO hole, so everything above it is shifted down by the hole size.
-//
-// This is arithmetic, not a bit permutation: the borrow it propagates cannot be
-// expressed as an XOR mask, so it can neither be folded into the masks in
-// address_mapping.py nor applied to an already-XORed address difference. Every
-// address must go through here individually, before decode_addr() or any of the
-// fields_equal() comparisons below.
-static inline uint64_t phys_to_dram(uint64_t phys) {
-    return phys >= DECODE_HOLE_END ? phys - DECODE_HOLE_SIZE : phys;
 }
 
 struct Decoded {
@@ -155,50 +134,20 @@ static inline bool diff_bank_group(const DecodeMap &m, uint64_t a, uint64_t b) {
            !fields_equal(m.bank_group, m.n_bank_group, D);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// /proc/self/pagemap: virtual -> physical address translation
-// ─────────────────────────────────────────────────────────────────────────
-
-struct Pagemap {
-    int fd;
-    long page_size;
-
-    Pagemap() : page_size(sysconf(_SC_PAGESIZE)) {
-        fd = open("/proc/self/pagemap", O_RDONLY);
-        if (fd < 0) {
-            std::perror("open /proc/self/pagemap");
-            std::exit(1);
-        }
+// Pagemap::virt_to_phys() (hugepage_alloc.h) returns 0 when the translation is
+// unavailable; latency_bw cannot work without real PFNs, so treat that as fatal.
+static uint64_t virt_to_phys_or_die(const Pagemap &pm, uint64_t vaddr) {
+    uint64_t phys = pm.virt_to_phys(vaddr);
+    if (phys == 0) {
+        std::fprintf(stderr,
+            "error: no physical address for vaddr=0x%llx — page not present, or "
+            "pagemap PFNs masked (re-run with sudo/root; the kernel masks PFNs for "
+            "unprivileged processes since Linux 4.0)\n",
+            (unsigned long long)vaddr);
+        std::exit(1);
     }
-    ~Pagemap() { if (fd >= 0) close(fd); }
-
-    uint64_t virt_to_phys(uint64_t vaddr) const {
-        uint64_t vpn = vaddr / static_cast<uint64_t>(page_size);
-        uint64_t entry;
-        ssize_t n = pread(fd, &entry, sizeof(entry),
-                          static_cast<off_t>(vpn * sizeof(entry)));
-        if (n != static_cast<ssize_t>(sizeof(entry))) {
-            std::fprintf(stderr, "error: pread /proc/self/pagemap failed for vaddr=0x%llx\n",
-                        (unsigned long long)vaddr);
-            std::exit(1);
-        }
-        bool present = (entry >> 63) & 1ULL;
-        if (!present) {
-            std::fprintf(stderr, "error: page not present for vaddr=0x%llx\n",
-                        (unsigned long long)vaddr);
-            std::exit(1);
-        }
-        uint64_t pfn = entry & ((1ULL << 55) - 1);
-        if (pfn == 0) {
-            std::fprintf(stderr,
-                "error: pagemap PFN==0 for vaddr=0x%llx — re-run with sudo/root "
-                "(kernel masks PFNs for unprivileged processes since Linux 4.0)\n",
-                (unsigned long long)vaddr);
-            std::exit(1);
-        }
-        return pfn * static_cast<uint64_t>(page_size) + (vaddr % static_cast<uint64_t>(page_size));
-    }
-};
+    return phys;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Latency measurement kernel
@@ -299,7 +248,7 @@ static AddrInfo make_addr_info(const Pagemap &pm, const DecodeMap &m,
                                uint8_t *base, uint64_t voffset) {
     AddrInfo info;
     info.vaddr = reinterpret_cast<uint64_t>(base + voffset);
-    info.phys  = pm.virt_to_phys(info.vaddr);
+    info.phys  = virt_to_phys_or_die(pm, info.vaddr);
     info.dram  = phys_to_dram(info.phys);
     info.d     = decode_addr(m, info.dram);
     return info;

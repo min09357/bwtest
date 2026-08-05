@@ -1,0 +1,1 @@
+../CoreFreq/build/corefreq-cli

@@ -1,1 +1,1 @@
-sudo numactl -N 0 -m 0 ./latency_bw 6 100 1000000 0
+sudo numactl -N 0 -m 0 ./latency_bw 75 100 1000000 0

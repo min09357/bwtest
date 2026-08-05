@@ -76,7 +76,27 @@ ADDR_MAP = "arrow_1ch_1dpc_1rank_16gb"
 DRAM_HOLE_START = 0x80000000    # TOLUD — first MMIO address below 4GB
 DRAM_HOLE_END   = 0x100000000   # 4GB
 
+# ─── Hugepage channel balancing ──────────────────────────────────────────────
+# A channel XOR function whose bits are ALL >= 30 is constant across a whole 1GB
+# hugepage (e.g. cascade_4ch_1dpc_2rank_32gb's channel[1] = 0x1000000000, bit
+# 36), so one hugepage only reaches half the channels and a plain mmap() can
+# hand the benchmark a region that sits entirely on one side of that bit.
+#
+# BALANCE_HUGEPAGES makes randread_bw/stream_bw probe candidate hugepages
+# through a hugetlb memfd, pick equally many of each channel class, and map them
+# so consecutive 1GB slots in VA alternate classes. Mappings whose channel bits
+# all live below bit 30 need none of this — the option then reports that and
+# takes the plain path.
+#
+# Both options read /proc/self/pagemap, which requires root — set USE_SUDO=True
+# below (or run the binaries under sudo). Without root they print a warning and
+# fall back to the plain mmap path.
+
+BALANCE_HUGEPAGES    = True   # channel-balanced + VA-interleaved hugepage selection
+PRINT_HUGEPAGE_ADDRS = True   # dump each hugepage's virtual/physical address + class
+
 # ─── Misc ────────────────────────────────────────────────────────────────────
 
 # Set to True if the binary needs sudo to allocate 1GB hugepages
-USE_SUDO = False
+# (also required by BALANCE_HUGEPAGES / PRINT_HUGEPAGE_ADDRS above)
+USE_SUDO = True
